@@ -1,13 +1,11 @@
 # app.py
 # UI-only refactor — keeps all logic unchanged (model loading, feature engineering, indication).
-# Replace your existing app.py with this file. Only presentation changed.
 
 import os
 import pickle
 from pathlib import Path
 import joblib
 import sys
-import inspect
 
 import streamlit as st
 import pandas as pd
@@ -24,7 +22,6 @@ FEATURE_COLS = ['ma_5','ma_20','rsi_14','log_return','lag_1','lag_2','lag_3','la
 
 # Page config and base styles
 st.set_page_config(page_title="AAPL — Next-Day Indicator", layout="wide", initial_sidebar_state="expanded")
-# Minimal CSS to tighten spacing and make cards
 st.markdown(
     """
     <style>
@@ -45,6 +42,8 @@ st.markdown(
     }
     .feat-title {font-weight:700; font-size:16px; color:#fff;}
     .feat-sub {font-size:13px; color: #9aa3b2;}
+    /* tighten table cells */
+    .stTable td, .stTable th { padding: 8px 10px; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -189,7 +188,7 @@ if not csv_file.exists():
 
 try:
     df_raw = pd.read_csv(csv_file, parse_dates=['Date'], infer_datetime_format=True)
-except Exception as e:
+except Exception:
     st.error("Failed to read CSV. Check path and file format.")
     st.stop()
 
@@ -200,7 +199,7 @@ if 'Close' not in df_raw.columns and 'Price' in df_raw.columns:
 # Build features (suppress internal details)
 try:
     df_feat = build_features_from_df(df_raw)
-except Exception as e:
+except Exception:
     st.error("Feature creation failed. Ensure CSV has 'Date' and 'Close'/'Price' columns.")
     st.stop()
 
@@ -239,7 +238,7 @@ with tab_manual:
             'lag_3': lag_3, 'lag_5': lag_5, 'lag_10': lag_10
         }])
 
-        st.markdown("**Input preview**")
+        # Pretty display: Feature / Value with units where meaningful
         units = {
             'ma_5': 'price', 'ma_20': 'price', 'rsi_14': 'index (0-100)',
             'log_return': 'log', 'lag_1': 'return', 'lag_2': 'return',
@@ -250,6 +249,7 @@ with tab_manual:
             'Value': [f"{v:.6f}" if isinstance(v, (int,float,np.floating)) else v for v in X_row.iloc[0].values],
             'Units': [units.get(c, "") for c in X_row.columns]
         })
+        st.markdown("**Input preview**")
         st.table(display_df[['Feature','Value','Units']].set_index('Feature'))
 
         if model is None:
@@ -262,74 +262,82 @@ with tab_manual:
                 pred_val = None
 
             if pred_val is not None:
-                # numeric metrics
+                # metrics row (no RSI/MA here per your request)
                 m1, m2 = st.columns(2)
                 with m1:
                     st.metric("Indicated return", f"{pred_val:.6f}", delta=None)
                 with m2:
                     st.metric("Indicated return (%)", f"{pred_val*100:.2f}%")
 
-                # build prediction card (NO RSI / MA KPIs here)
+                # movement range
+                low = pred_val - hist_return_std
+                high = pred_val + hist_return_std
+
+                # direction and styling
                 direction_label = "BULLISH" if pred_val > 0 else "BEARISH"
                 direction_color = "#2ecc71" if pred_val > 0 else "#e74c3c"
                 arrow_symbol = "▲" if pred_val > 0 else "▼"
                 pred_pct = pred_val * 100
 
-                # movement range
-                low = pred_val - hist_return_std
-                high = pred_val + hist_return_std
+                # choose gradient depending on direction
+                if pred_val > 0:
+                    card_bg = "linear-gradient(180deg, rgba(20,60,55,0.95), rgba(10,30,30,0.95))"
+                    border_col = "rgba(46,204,113,0.15)"
+                else:
+                    card_bg = "linear-gradient(180deg, rgba(80,30,30,0.95), rgba(30,10,10,0.95))"
+                    border_col = "rgba(231,76,60,0.15)"
 
-# direction_label, direction_color, arrow_symbol, pred_pct, low, high already computed above
+                card_html = f"""
+                <div style="
+                    border-radius:12px;
+                    padding:28px;
+                    background: {card_bg};
+                    border: 2px solid {border_col};
+                    box-shadow: 0 8px 20px rgba(0,0,0,0.45);
+                ">
+                  <div style="text-align:center; color: #a7e0ca; font-weight:600; letter-spacing:2px; font-size:14px;">
+                    MODEL PREDICTION
+                  </div>
 
-# select gradient/border depending on direction
-if pred_val > 0:
-    # green gradient (bullish)
-    card_bg = "linear-gradient(180deg, rgba(20,60,55,0.95), rgba(10,30,30,0.95))"
-    border_col = "rgba(46,204,113,0.15)"
-else:
-    # red gradient (bearish) — lighter warm red gradient
-    card_bg = "linear-gradient(180deg, rgba(80,30,30,0.95), rgba(30,10,10,0.95))"
-    border_col = "rgba(231,76,60,0.15)"
+                  <div style="text-align:center; font-size:48px; font-weight:800; margin-top:6px; color: {direction_color};">
+                    {direction_label} <span style="font-size:36px;vertical-align:middle">{arrow_symbol}</span>
+                  </div>
 
-card_html = f"""
-<div style="
-    border-radius:12px;
-    padding:28px;
-    background: {card_bg};
-    border: 2px solid {border_col};
-    box-shadow: 0 8px 20px rgba(0,0,0,0.45);
-">
-  <div style="text-align:center; color: #a7e0ca; font-weight:600; letter-spacing:2px; font-size:14px;">
-    MODEL PREDICTION
-  </div>
+                  <div style="text-align:center; color:#cbdfe5; margin-top:8px; font-size:16px;">
+                    Expected Return: <strong style="color:white">{pred_pct:+.2f}%</strong>
+                  </div>
 
-  <div style="text-align:center; font-size:48px; font-weight:800; margin-top:6px; color: {direction_color};">
-    {direction_label} <span style="font-size:36px;vertical-align:middle">{arrow_symbol}</span>
-  </div>
+                  <div style="text-align:center;color:#9aa5b1;margin-top:18px;font-size:14px;">
+                     Estimated movement range (±1σ):
+                     <span style="color:#ffffff;font-weight:600">{low:+.2%} → {high:+.2%}</span>
+                  </div>
+                </div>
+                """
+                st.markdown(card_html, unsafe_allow_html=True)
 
-  <div style="text-align:center; color:#cbdfe5; margin-top:8px; font-size:16px;">
-    Expected Return: <strong style="color:white">{pred_pct:+.2f}%</strong>
-  </div>
-
-  <div style="text-align:center;color:#9aa5b1;margin-top:18px;font-size:14px;">
-     Estimated movement range (±1σ):
-     <span style="color:#ffffff;font-weight:600">{low:+.2%} → {high:+.2%}</span>
-  </div>
-</div>
-"""
-st.markdown(card_html, unsafe_allow_html=True)
-
-
+                # show textual movement range and implied price range when possible
                 st.markdown(f"**Estimated movement range (heuristic ±1σ):** {low:.4%} → {high:.4%}")
 
-# ---------- Historical-date tab (refreshed UI, no RSI/MA KPIs) ----------
+# ---------- Historical-date tab (refreshed UI) ----------
 with tab_history:
     st.subheader("Historical-date indication (recomputes features from CSV)")
     st.markdown("Pick a historical trading date from your CSV; the app will recompute features for that date and indicate the next trading day.")
+
+    # available computed dates (for default selection)
     available_dates = df_feat['Date'].dt.date.unique()
     default_date = available_dates[-1] if len(available_dates) > 0 else None
 
-    chosen = st.date_input("Pick a date (must be trading day present in CSV)", value=default_date)
+    # make the calendar span the full CSV range (so early years like 2008 are selectable)
+    min_date = df_raw['Date'].min().date()
+    max_date = df_raw['Date'].max().date()
+
+    chosen = st.date_input(
+        "Pick a date (must be trading day present in CSV)",
+        value=default_date,
+        min_value=min_date,
+        max_value=max_date
+    )
+
     if st.button("Indicate from chosen date"):
         try:
             chosen_ts = pd.Timestamp(chosen)
@@ -351,7 +359,7 @@ with tab_history:
         if feat_row is not None:
             X_row = pd.DataFrame([feat_row[FEATURE_COLS].to_dict()])
 
-            # header above recomputed features
+            # ---------- Styled header above recomputed features ----------
             st.markdown(
                 """
                 <div class="feat-header">
@@ -362,6 +370,7 @@ with tab_history:
                 unsafe_allow_html=True
             )
 
+            # Pretty display for recomputed features (with units)
             units = {
                 'ma_5': 'price', 'ma_20': 'price', 'rsi_14': 'index (0-100)',
                 'log_return': 'log', 'lag_1': 'return', 'lag_2': 'return',
@@ -385,7 +394,7 @@ with tab_history:
                     pred_val = None
 
                 if pred_val is not None:
-                    # robustly obtain current_close if available
+                    # find current_close from raw CSV (robust)
                     current_close = None
                     if 'Date' in df_raw.columns and 'Close' in df_raw.columns:
                         df_local = df_raw.copy()
@@ -402,33 +411,46 @@ with tab_history:
                                 current_close = float(df_local['Close'].iloc[-1])
                                 st.warning("No rows on/before chosen date — falling back to latest close.")
 
-                    # show numeric metrics
+                    # show metrics (no RSI/MA here)
                     c1, c2 = st.columns(2)
                     with c1:
                         st.metric("Indicated return", f"{pred_val:.6f}", delta=None)
                     with c2:
                         st.metric("Indicated return (%)", f"{pred_val*100:.2f}%")
 
-                    # show implied price if available
+                    # implied price when close available
                     if current_close is not None:
                         implied = current_close * (1 + pred_val)
                         st.markdown(f"**Current close (CSV):** {current_close:.4f}")
                         st.markdown(f"**Implied next-day close:** {implied:.4f}")
 
-                    # prediction card (no RSI/MA KPIs)
+                    # movement range
+                    low = pred_val - hist_return_std
+                    high = pred_val + hist_return_std
+                    st.markdown(f"**Estimated movement range (heuristic ±1σ):** {low:.4%} → {high:.4%}")
+                    if current_close is not None:
+                        st.markdown(f"**Implied price range:** {current_close*(1+low):.4f} → {current_close*(1+high):.4f}")
+
+                    # prediction card (direction-aware color)
                     direction_label = "BULLISH" if pred_val > 0 else "BEARISH"
                     direction_color = "#2ecc71" if pred_val > 0 else "#e74c3c"
                     arrow_symbol = "▲" if pred_val > 0 else "▼"
                     pred_pct = pred_val * 100
-                    low = pred_val - hist_return_std
-                    high = pred_val + hist_return_std
 
+                    if pred_val > 0:
+                        card_bg = "linear-gradient(180deg, rgba(20,60,55,0.95), rgba(10,30,30,0.95))"
+                        border_col = "rgba(46,204,113,0.15)"
+                    else:
+                        card_bg = "linear-gradient(180deg, rgba(80,30,30,0.95), rgba(30,10,10,0.95))"
+                        border_col = "rgba(231,76,60,0.15)"
+
+                    # large central card
                     card_html = f"""
                     <div style="
                         border-radius:12px;
                         padding:28px;
-                        background: linear-gradient(180deg, rgba(20,60,55,0.95), rgba(10,30,30,0.95));
-                        border: 2px solid rgba(46,204,113,0.15);
+                        background: {card_bg};
+                        border: 2px solid {border_col};
                         box-shadow: 0 8px 20px rgba(0,0,0,0.45);
                     ">
                       <div style="text-align:center; color: #a7e0ca; font-weight:600; letter-spacing:2px; font-size:14px;">
@@ -451,12 +473,7 @@ with tab_history:
                     """
                     st.markdown(card_html, unsafe_allow_html=True)
 
-                    # textual movement-range and implied price range
-                    st.markdown(f"**Estimated movement range (heuristic ±1σ):** {low:.4%} → {high:.4%}")
-                    if current_close is not None:
-                        st.markdown(f"**Implied price range:** {current_close*(1+low):.4f} → {current_close*(1+high):.4f}")
-
-                    # actual next-day if present
+                    # actual next-day (if available in raw CSV)
                     if current_close is not None and 'Date' in df_raw.columns and 'Close' in df_raw.columns:
                         df_local = df_raw.copy()
                         df_local['Date'] = pd.to_datetime(df_local['Date'])
