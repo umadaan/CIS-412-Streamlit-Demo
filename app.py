@@ -210,12 +210,12 @@ hist_return_std = float(df_feat['next_return'].std()) if 'next_return' in df_fea
 # ---------- Main interactive area using tabs ----------
 tab_manual, tab_history, tab_info = st.tabs(["Manual Input", "Historical Date", "About & Tips"])
 
-# ---------- Manual Input tab ----------
+# ---------- Manual Input tab (refreshed UI) ----------
 with tab_manual:
     st.subheader("Manual input — craft a custom feature vector")
     st.markdown("Enter a set of feature values and indicate the next-day return. Useful for experiments.")
     with st.form("manual_form_ui", clear_on_submit=False):
-        # arrange inputs in two columns
+        # arrange inputs in three columns
         c1, c2, c3 = st.columns([1,1,1])
         with c1:
             ma_5 = st.number_input("MA5", value=float(df_feat['ma_5'].median()), format="%.6f", step=0.0001)
@@ -238,8 +238,8 @@ with tab_manual:
             'log_return': log_return, 'lag_1': lag_1, 'lag_2': lag_2,
             'lag_3': lag_3, 'lag_5': lag_5, 'lag_10': lag_10
         }])
+
         st.markdown("**Input preview**")
-        # Pretty display: Feature / Value with units where meaningful
         units = {
             'ma_5': 'price', 'ma_20': 'price', 'rsi_14': 'index (0-100)',
             'log_return': 'log', 'lag_1': 'return', 'lag_2': 'return',
@@ -250,7 +250,6 @@ with tab_manual:
             'Value': [f"{v:.6f}" if isinstance(v, (int,float,np.floating)) else v for v in X_row.iloc[0].values],
             'Units': [units.get(c, "") for c in X_row.columns]
         })
-        # show as a clean two-column table (hide Units if you prefer)
         st.table(display_df[['Feature','Value','Units']].set_index('Feature'))
 
         if model is None:
@@ -263,62 +262,23 @@ with tab_manual:
                 pred_val = None
 
             if pred_val is not None:
-                # metrics row (direction removed by request)
+                # numeric metrics
                 m1, m2 = st.columns(2)
                 with m1:
                     st.metric("Indicated return", f"{pred_val:.6f}", delta=None)
                 with m2:
                     st.metric("Indicated return (%)", f"{pred_val*100:.2f}%")
 
-                # ------- POLISHED INDICATOR CARD UI (Manual Mode) -------
-                # small indicator values from X_row
-                try:
-                    rsi_recent = float(X_row.loc[0, "rsi_14"])
-                except Exception:
-                    rsi_recent = np.nan
-
-                try:
-                    ma5_val = float(X_row.loc[0, "ma_5"])
-                except Exception:
-                    ma5_val = np.nan
-
-                # determine bullish / bearish (purely visual)
+                # build prediction card (NO RSI / MA KPIs here)
                 direction_label = "BULLISH" if pred_val > 0 else "BEARISH"
                 direction_color = "#2ecc71" if pred_val > 0 else "#e74c3c"
                 arrow_symbol = "▲" if pred_val > 0 else "▼"
                 pred_pct = pred_val * 100
 
-                # movement range (manual mode) — single calculation
+                # movement range
                 low = pred_val - hist_return_std
                 high = pred_val + hist_return_std
 
-                # ------- KPI Row (RSI / MA5) --------
-                k1, k2 = st.columns([1,1])
-                with k1:
-                    st.markdown(
-                        f"""
-                        <div style='background:#0b0f12;padding:18px;border-radius:8px;'>
-                            <div style='color:#9aa5b1;font-size:14px;margin-bottom:6px;'>Recent RSI</div>
-                            <div style='font-size:30px;font-weight:600;color:#ffffff'>{'' if np.isnan(rsi_recent) else f'{rsi_recent:.1f}'}</div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
-
-                with k2:
-                    st.markdown(
-                        f"""
-                        <div style='background:#0b0f12;padding:18px;border-radius:8px;'>
-                            <div style='color:#9aa5b1;font-size:14px;margin-bottom:6px;'>5-Day MA</div>
-                            <div style='font-size:30px;font-weight:600;color:#ffffff'>{'' if np.isnan(ma5_val) else f'${ma5_val:,.2f}'}</div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
-
-                st.markdown("")  # spacing
-
-                # ------- Prediction Card -------
                 card_html = f"""
                 <div style="
                     border-radius:12px;
@@ -347,19 +307,14 @@ with tab_manual:
                 """
                 st.markdown(card_html, unsafe_allow_html=True)
 
-                # single, clear movement-range text (keeps the concise textual summary)
                 st.markdown(f"**Estimated movement range (heuristic ±1σ):** {low:.4%} → {high:.4%}")
 
-# ---------- Historical-date tab ----------
+# ---------- Historical-date tab (refreshed UI, no RSI/MA KPIs) ----------
 with tab_history:
     st.subheader("Historical-date indication (recomputes features from CSV)")
     st.markdown("Pick a historical trading date from your CSV; the app will recompute features for that date and indicate the next trading day.")
-    # compact date selector: choose from available dates (shows last N)
     available_dates = df_feat['Date'].dt.date.unique()
-    if len(available_dates) > 0:
-        default_date = available_dates[-1]
-    else:
-        default_date = None
+    default_date = available_dates[-1] if len(available_dates) > 0 else None
 
     chosen = st.date_input("Pick a date (must be trading day present in CSV)", value=default_date)
     if st.button("Indicate from chosen date"):
@@ -383,7 +338,7 @@ with tab_history:
         if feat_row is not None:
             X_row = pd.DataFrame([feat_row[FEATURE_COLS].to_dict()])
 
-            # ---------- Styled header above recomputed features ----------
+            # header above recomputed features
             st.markdown(
                 """
                 <div class="feat-header">
@@ -394,7 +349,6 @@ with tab_history:
                 unsafe_allow_html=True
             )
 
-            # Pretty display for recomputed features (with units)
             units = {
                 'ma_5': 'price', 'ma_20': 'price', 'rsi_14': 'index (0-100)',
                 'log_return': 'log', 'lag_1': 'return', 'lag_2': 'return',
@@ -418,7 +372,7 @@ with tab_history:
                     pred_val = None
 
                 if pred_val is not None:
-                    # find current_close from raw CSV (robust)
+                    # robustly obtain current_close if available
                     current_close = None
                     if 'Date' in df_raw.columns and 'Close' in df_raw.columns:
                         df_local = df_raw.copy()
@@ -435,27 +389,61 @@ with tab_history:
                                 current_close = float(df_local['Close'].iloc[-1])
                                 st.warning("No rows on/before chosen date — falling back to latest close.")
 
-                    # show metrics and ranges (direction removed)
+                    # show numeric metrics
                     c1, c2 = st.columns(2)
                     with c1:
                         st.metric("Indicated return", f"{pred_val:.6f}", delta=None)
                     with c2:
                         st.metric("Indicated return (%)", f"{pred_val*100:.2f}%")
 
-                    # implied price when close available
+                    # show implied price if available
                     if current_close is not None:
                         implied = current_close * (1 + pred_val)
                         st.markdown(f"**Current close (CSV):** {current_close:.4f}")
                         st.markdown(f"**Implied next-day close:** {implied:.4f}")
 
-                    # movement range
+                    # prediction card (no RSI/MA KPIs)
+                    direction_label = "BULLISH" if pred_val > 0 else "BEARISH"
+                    direction_color = "#2ecc71" if pred_val > 0 else "#e74c3c"
+                    arrow_symbol = "▲" if pred_val > 0 else "▼"
+                    pred_pct = pred_val * 100
                     low = pred_val - hist_return_std
                     high = pred_val + hist_return_std
+
+                    card_html = f"""
+                    <div style="
+                        border-radius:12px;
+                        padding:28px;
+                        background: linear-gradient(180deg, rgba(20,60,55,0.95), rgba(10,30,30,0.95));
+                        border: 2px solid rgba(46,204,113,0.15);
+                        box-shadow: 0 8px 20px rgba(0,0,0,0.45);
+                    ">
+                      <div style="text-align:center; color: #a7e0ca; font-weight:600; letter-spacing:2px; font-size:14px;">
+                        MODEL PREDICTION
+                      </div>
+
+                      <div style="text-align:center; font-size:48px; font-weight:800; margin-top:6px; color: {direction_color};">
+                        {direction_label} <span style="font-size:36px;vertical-align:middle">{arrow_symbol}</span>
+                      </div>
+
+                      <div style="text-align:center; color:#cbdfe5; margin-top:8px; font-size:16px;">
+                        Expected Return: <strong style="color:white">{pred_pct:+.2f}%</strong>
+                      </div>
+
+                      <div style="text-align:center;color:#9aa5b1;margin-top:18px;font-size:14px;">
+                         Estimated movement range (±1σ):
+                         <span style="color:#ffffff;font-weight:600">{low:+.2%} → {high:+.2%}</span>
+                      </div>
+                    </div>
+                    """
+                    st.markdown(card_html, unsafe_allow_html=True)
+
+                    # textual movement-range and implied price range
                     st.markdown(f"**Estimated movement range (heuristic ±1σ):** {low:.4%} → {high:.4%}")
                     if current_close is not None:
                         st.markdown(f"**Implied price range:** {current_close*(1+low):.4f} → {current_close*(1+high):.4f}")
 
-                    # actual next-day (if available)
+                    # actual next-day if present
                     if current_close is not None and 'Date' in df_raw.columns and 'Close' in df_raw.columns:
                         df_local = df_raw.copy()
                         df_local['Date'] = pd.to_datetime(df_local['Date'])
