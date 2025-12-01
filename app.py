@@ -253,7 +253,6 @@ with tab_manual:
         # show as a clean two-column table (hide Units if you prefer)
         st.table(display_df[['Feature','Value','Units']].set_index('Feature'))
 
-
         if model is None:
             st.error("Model is not loaded. Place model artifact in `artifacts/` and reload.")
         else:
@@ -270,91 +269,86 @@ with tab_manual:
                     st.metric("Indicated return", f"{pred_val:.6f}", delta=None)
                 with m2:
                     st.metric("Indicated return (%)", f"{pred_val*100:.2f}%")
-                # -------------------------------------------------------------
-#  POLISHED INDICATOR CARD UI (Manual Mode)
-#  Paste this AFTER your "Indicated return" output in manual tab
-# -------------------------------------------------------------
 
-# small indicator values from X_row
-                        try:
-                            rsi_recent = float(X_row.get("rsi_14", np.nan))
-                        except:
-                            rsi_recent = np.nan
-                        
-                        try:
-                            ma5_val = float(X_row.get("ma_5", np.nan))
-                        except:
-                            ma5_val = np.nan
-                        
-                        # determine bullish / bearish
-                        direction_label = "BULLISH" if pred_val > 0 else "BEARISH"
-                        direction_color = "#2ecc71" if pred_val > 0 else "#e74c3c"
-                        arrow_symbol = "▲" if pred_val > 0 else "▼"
-                        pred_pct = pred_val * 100
-                        
-                        # movement range (manual mode)
-                        low = pred_val - hist_return_std
-                        high = pred_val + hist_return_std
-                        
-                        # ------- KPI Row --------
-                        k1, k2 = st.columns([1,1])
-                        with k1:
-                            st.markdown(
-                                f"""
-                                <div style='background:#0b0f12;padding:18px;border-radius:8px;'>
-                                    <div style='color:#9aa5b1;font-size:14px;margin-bottom:6px;'>Recent RSI</div>
-                                    <div style='font-size:30px;font-weight:600;color:#ffffff'>{'' if np.isnan(rsi_recent) else f'{rsi_recent:.1f}'}</div>
-                                </div>
-                                """,
-                                unsafe_allow_html=True
-                            )
-                        
-                        with k2:
-                            st.markdown(
-                                f"""
-                                <div style='background:#0b0f12;padding:18px;border-radius:8px;'>
-                                    <div style='color:#9aa5b1;font-size:14px;margin-bottom:6px;'>5-Day MA</div>
-                                    <div style='font-size:30px;font-weight:600;color:#ffffff'>{'' if np.isnan(ma5_val) else f'${ma5_val:,.2f}'}</div>
-                                </div>
-                                """,
-                                unsafe_allow_html=True
-                            )
-                        
-                        st.markdown("")
-                        
-                        # ------- Prediction Card -------
-                        card_html = f"""
-                        <div style="
-                            border-radius:12px;
-                            padding:28px;
-                            background: linear-gradient(180deg, rgba(20,60,55,0.95), rgba(10,30,30,0.95));
-                            border: 2px solid rgba(46,204,113,0.15);
-                            box-shadow: 0 8px 20px rgba(0,0,0,0.45);
-                        ">
-                          <div style="text-align:center; color: #a7e0ca; font-weight:600; letter-spacing:2px; font-size:14px;">
-                            MODEL PREDICTION
-                          </div>
-                        
-                          <div style="text-align:center; font-size:48px; font-weight:800; margin-top:6px; color: {direction_color};">
-                            {direction_label} <span style="font-size:36px;vertical-align:middle">{arrow_symbol}</span>
-                          </div>
-                        
-                          <div style="text-align:center; color:#cbdfe5; margin-top:8px; font-size:16px;">
-                            Expected Return: <strong style="color:white">{pred_pct:+.2f}%</strong>
-                          </div>
-                        
-                          <div style="text-align:center;color:#9aa5b1;margin-top:18px;font-size:14px;">
-                             Estimated movement range (±1σ): 
-                             <span style="color:#ffffff;font-weight:600">{low:+.2%} → {high:+.2%}</span>
-                          </div>
+                # ------- POLISHED INDICATOR CARD UI (Manual Mode) -------
+                # small indicator values from X_row
+                try:
+                    rsi_recent = float(X_row.loc[0, "rsi_14"])
+                except Exception:
+                    rsi_recent = np.nan
+
+                try:
+                    ma5_val = float(X_row.loc[0, "ma_5"])
+                except Exception:
+                    ma5_val = np.nan
+
+                # determine bullish / bearish (purely visual)
+                direction_label = "BULLISH" if pred_val > 0 else "BEARISH"
+                direction_color = "#2ecc71" if pred_val > 0 else "#e74c3c"
+                arrow_symbol = "▲" if pred_val > 0 else "▼"
+                pred_pct = pred_val * 100
+
+                # movement range (manual mode) — single calculation
+                low = pred_val - hist_return_std
+                high = pred_val + hist_return_std
+
+                # ------- KPI Row (RSI / MA5) --------
+                k1, k2 = st.columns([1,1])
+                with k1:
+                    st.markdown(
+                        f"""
+                        <div style='background:#0b0f12;padding:18px;border-radius:8px;'>
+                            <div style='color:#9aa5b1;font-size:14px;margin-bottom:6px;'>Recent RSI</div>
+                            <div style='font-size:30px;font-weight:600;color:#ffffff'>{'' if np.isnan(rsi_recent) else f'{rsi_recent:.1f}'}</div>
                         </div>
-                        """
-                        st.markdown(card_html, unsafe_allow_html=True)
-                        
-                                        # movement range
-                                        low = pred_val - hist_return_std
-                                        high = pred_val + hist_return_std
-                                        st.markdown(f"**Estimated movement range (heuristic ±1σ):** {low:.4%} → {high:.4%}")
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                with k2:
+                    st.markdown(
+                        f"""
+                        <div style='background:#0b0f12;padding:18px;border-radius:8px;'>
+                            <div style='color:#9aa5b1;font-size:14px;margin-bottom:6px;'>5-Day MA</div>
+                            <div style='font-size:30px;font-weight:600;color:#ffffff'>{'' if np.isnan(ma5_val) else f'${ma5_val:,.2f}'}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                st.markdown("")  # spacing
+
+                # ------- Prediction Card -------
+                card_html = f"""
+                <div style="
+                    border-radius:12px;
+                    padding:28px;
+                    background: linear-gradient(180deg, rgba(20,60,55,0.95), rgba(10,30,30,0.95));
+                    border: 2px solid rgba(46,204,113,0.15);
+                    box-shadow: 0 8px 20px rgba(0,0,0,0.45);
+                ">
+                  <div style="text-align:center; color: #a7e0ca; font-weight:600; letter-spacing:2px; font-size:14px;">
+                    MODEL PREDICTION
+                  </div>
+
+                  <div style="text-align:center; font-size:48px; font-weight:800; margin-top:6px; color: {direction_color};">
+                    {direction_label} <span style="font-size:36px;vertical-align:middle">{arrow_symbol}</span>
+                  </div>
+
+                  <div style="text-align:center; color:#cbdfe5; margin-top:8px; font-size:16px;">
+                    Expected Return: <strong style="color:white">{pred_pct:+.2f}%</strong>
+                  </div>
+
+                  <div style="text-align:center;color:#9aa5b1;margin-top:18px;font-size:14px;">
+                     Estimated movement range (±1σ):
+                     <span style="color:#ffffff;font-weight:600">{low:+.2%} → {high:+.2%}</span>
+                  </div>
+                </div>
+                """
+                st.markdown(card_html, unsafe_allow_html=True)
+
+                # single, clear movement-range text (keeps the concise textual summary)
+                st.markdown(f"**Estimated movement range (heuristic ±1σ):** {low:.4%} → {high:.4%}")
 
 # ---------- Historical-date tab ----------
 with tab_history:
@@ -412,18 +406,7 @@ with tab_history:
                 'Value': [f"{vals[k]:.6f}" if pd.notna(vals[k]) and isinstance(vals[k], (int,float,np.floating)) else vals[k] for k in vals.keys()],
                 'Units': [units.get(k, "") for k in vals.keys()]
             })
-            # nicer visual: big numeric column on the right, units shown
-            st.markdown(
-                """
-                <div style="display:flex; gap:12px; align-items:center;">
-                <div style="flex:1">
-                </div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
             st.table(display_df[['Feature','Value','Units']].set_index('Feature'))
-
 
             if model is None:
                 st.error("Model not loaded. Place model in `artifacts/` and reload.")
