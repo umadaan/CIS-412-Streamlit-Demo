@@ -279,33 +279,46 @@ with tab_manual:
                 low = pred_val - hist_return_std
                 high = pred_val + hist_return_std
 
-                card_html = f"""
-                <div style="
-                    border-radius:12px;
-                    padding:28px;
-                    background: linear-gradient(180deg, rgba(20,60,55,0.95), rgba(10,30,30,0.95));
-                    border: 2px solid rgba(46,204,113,0.15);
-                    box-shadow: 0 8px 20px rgba(0,0,0,0.45);
-                ">
-                  <div style="text-align:center; color: #a7e0ca; font-weight:600; letter-spacing:2px; font-size:14px;">
-                    MODEL PREDICTION
-                  </div>
+# direction_label, direction_color, arrow_symbol, pred_pct, low, high already computed above
 
-                  <div style="text-align:center; font-size:48px; font-weight:800; margin-top:6px; color: {direction_color};">
-                    {direction_label} <span style="font-size:36px;vertical-align:middle">{arrow_symbol}</span>
-                  </div>
+# select gradient/border depending on direction
+if pred_val > 0:
+    # green gradient (bullish)
+    card_bg = "linear-gradient(180deg, rgba(20,60,55,0.95), rgba(10,30,30,0.95))"
+    border_col = "rgba(46,204,113,0.15)"
+else:
+    # red gradient (bearish) — lighter warm red gradient
+    card_bg = "linear-gradient(180deg, rgba(80,30,30,0.95), rgba(30,10,10,0.95))"
+    border_col = "rgba(231,76,60,0.15)"
 
-                  <div style="text-align:center; color:#cbdfe5; margin-top:8px; font-size:16px;">
-                    Expected Return: <strong style="color:white">{pred_pct:+.2f}%</strong>
-                  </div>
+card_html = f"""
+<div style="
+    border-radius:12px;
+    padding:28px;
+    background: {card_bg};
+    border: 2px solid {border_col};
+    box-shadow: 0 8px 20px rgba(0,0,0,0.45);
+">
+  <div style="text-align:center; color: #a7e0ca; font-weight:600; letter-spacing:2px; font-size:14px;">
+    MODEL PREDICTION
+  </div>
 
-                  <div style="text-align:center;color:#9aa5b1;margin-top:18px;font-size:14px;">
-                     Estimated movement range (±1σ):
-                     <span style="color:#ffffff;font-weight:600">{low:+.2%} → {high:+.2%}</span>
-                  </div>
-                </div>
-                """
-                st.markdown(card_html, unsafe_allow_html=True)
+  <div style="text-align:center; font-size:48px; font-weight:800; margin-top:6px; color: {direction_color};">
+    {direction_label} <span style="font-size:36px;vertical-align:middle">{arrow_symbol}</span>
+  </div>
+
+  <div style="text-align:center; color:#cbdfe5; margin-top:8px; font-size:16px;">
+    Expected Return: <strong style="color:white">{pred_pct:+.2f}%</strong>
+  </div>
+
+  <div style="text-align:center;color:#9aa5b1;margin-top:18px;font-size:14px;">
+     Estimated movement range (±1σ):
+     <span style="color:#ffffff;font-weight:600">{low:+.2%} → {high:+.2%}</span>
+  </div>
+</div>
+"""
+st.markdown(card_html, unsafe_allow_html=True)
+
 
                 st.markdown(f"**Estimated movement range (heuristic ±1σ):** {low:.4%} → {high:.4%}")
 
